@@ -60,4 +60,5 @@
     asm4.linkNext(&asm5);
 
     // build the asmir.asm file
-    try asm_test.asmCore.asm_build(&asm1, &data1, true);```
+    try asm_test.asmCore.asm_build(&asm1, &data1, true);
+    ```
