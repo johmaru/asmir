@@ -1,8 +1,10 @@
-//! By convention, main.zig is where your main function lives in the case that
-//! you are building an executable. If you are making a library, the convention
-//! is to delete this file and start with root.zig instead.
+# asm parser library
 
-test "asm_test" {
+## depend on nasm
+
+```zig  
+
+    // Example usage
 
     // use arena allocator to allocate memory
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -58,8 +60,4 @@ test "asm_test" {
     asm4.linkNext(&asm5);
 
     // build the asmir.asm file
-    try asm_test.asmCore.asm_build(&asm1, &data1, true);
-}
-
-const std = @import("std");
-const asm_test = @import("asm.zig");
+    try asm_test.asmCore.asm_build(&asm1, &data1, true);```

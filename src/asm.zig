@@ -106,9 +106,11 @@ pub const asmCore = struct {
     };
 
     pub const data = struct {
-        message: []const u8,
-        data_name: []const u8,
+        message: ?[]const u8,
+        data_name: ?[]const u8,
         allocator: std.mem.Allocator,
+        owns_message: bool = false,
+        owns_data_name: bool = false,
         next: ?*@This() = null,
 
         pub fn init(allocator: std.mem.Allocator) @This() {
@@ -117,11 +119,13 @@ pub const asmCore = struct {
                 .message = "",
                 .data_name = "",
                 .next = null,
+                .owns_message = false,
+                .owns_data_name = false,
             };
         }
 
         pub fn toAllocPrint(self: @This(), arena_allocator: std.mem.Allocator) ![]const u8 {
-            return std.fmt.allocPrint(arena_allocator, "   {s}: db \"{s}\", 0xa\n   {s}_length: equ $ - {s}\n", .{
+            return std.fmt.allocPrint(arena_allocator, "   {?s}: db \"{?s}\", 0xa\n   {?s}_length: equ $ - {?s}\n", .{
                 self.data_name,
                 self.message,
                 self.data_name,
@@ -130,11 +134,25 @@ pub const asmCore = struct {
         }
 
         pub fn getLength(self: @This()) ![]const u8 {
-            return std.fmt.allocPrint(self.allocator, "{s}_length", .{self.data_name});
+            return std.fmt.allocPrint(self.allocator, "{?s}_length", .{self.data_name});
         }
 
         pub fn deinit(self: *@This()) void {
-            self.allocator.free(self.message);
+            if (self.data_name) |name| {
+                if (self.owns_data_name) {
+                    self.allocator.free(name);
+                }
+            }
+
+            if (self.message) |msg| {
+                if (self.owns_message) {
+                    self.allocator.free(msg);
+                }
+            }
+
+            if (self.next) |next| {
+                next.deinit();
+            }
         }
 
         pub fn getNext(self: *@This()) ?*@This() {
@@ -157,6 +175,7 @@ pub const asmCore = struct {
         reg: u8 = 0,
         value: u32 = 0,
         msg: ?[]const u8 = "",
+        owns_msg: bool = false,
         syscall_number: ?u32 = 0,
         next: ?*@This() = null,
 
@@ -170,11 +189,19 @@ pub const asmCore = struct {
                 .msg = null,
                 .syscall_number = null,
                 .next = null,
+                .owns_msg = false,
             };
         }
 
-        pub fn deinit(self: *@This(), str: []const u8) void {
-            self.allocator.free(str);
+        pub fn deinit(self: *@This()) void {
+            if (self.msg) |msg| {
+                if (self.owns_msg) {
+                    self.allocator.free(msg);
+                }
+            }
+            if (self.next) |next| {
+                next.deinit();
+            }
         }
 
         pub fn toAsmString(self: *@This(), arena_allocator: std.mem.Allocator) ![]const u8 {
@@ -198,6 +225,9 @@ pub const asmCore = struct {
                     unreachable;
                 },
                 asmCore.instruction.add => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "add {s}, {d}\n", .{
                             registerToString(self.reg),
@@ -214,6 +244,9 @@ pub const asmCore = struct {
                     unreachable;
                 },
                 asmCore.instruction.sub => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "sub {s}, {d}\n", .{
                             registerToString(self.reg),
@@ -230,6 +263,9 @@ pub const asmCore = struct {
                     unreachable;
                 },
                 asmCore.instruction.mul => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "mul {s}, {d}\n", .{
                             registerToString(self.reg),
@@ -245,6 +281,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.div => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "div {s}, {d}\n", .{
                             registerToString(self.reg),
@@ -270,6 +309,9 @@ pub const asmCore = struct {
                     });
                 },
                 asmCore.instruction.cmp => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "cmp {s}, {d}\n", .{
                             registerToString(self.reg),
@@ -285,6 +327,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jmp => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jmp {d}\n", .{
                             self.value,
@@ -298,6 +343,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.je => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "je {d}\n", .{
                             self.value,
@@ -311,6 +359,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jne => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jne {d}\n", .{
                             self.value,
@@ -324,6 +375,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jl => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jl {d}\n", .{
                             self.value,
@@ -337,6 +391,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jle => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jle {d}\n", .{
                             self.value,
@@ -350,6 +407,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jg => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jg {d}\n", .{
                             self.value,
@@ -363,6 +423,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.jge => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "jge {d}\n", .{
                             self.value,
@@ -376,6 +439,9 @@ pub const asmCore = struct {
                     }
                 },
                 asmCore.instruction.call => {
+                    if (self.value == 0 and self.msg == null) {
+                        return error.MissingValue;
+                    }
                     if (self.value != 0) {
                         return std.fmt.allocPrint(arena_allocator, "call {d}\n", .{
                             self.value,
@@ -552,13 +618,6 @@ pub const asmCore = struct {
             current_inst = current_inst.?.next;
         }
 
-        try asm_content.appendSlice(
-            \\   mov rax, 60
-            \\   mov rdi, 0
-            \\   syscall
-            \\
-        );
-
         if (stackframe.?) {
             try asm_content.appendSlice(
                 \\   mov rsp, rbp
@@ -566,6 +625,13 @@ pub const asmCore = struct {
                 \\
             );
         }
+
+        try asm_content.appendSlice(
+            \\   mov rax, 60
+            \\   mov rdi, 0
+            \\   syscall
+            \\
+        );
 
         const file = try std.fs.cwd().createFile("asmir.asm", .{});
         defer file.close();
